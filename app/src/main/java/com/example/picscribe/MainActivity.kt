@@ -32,7 +32,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             PicScribeTheme {
                 // A surface container using the 'background' color from the theme
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     Column {
                         Greeting("Android")
                         CameraButton()
@@ -40,14 +43,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        cameraLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) {
-                val imageUri: Uri? = result.data?.data
-                // Process the captured photo here
+        cameraLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    val imageUri: Uri? = result.data?.data
+                    // Start the AddTextActivity and pass the image URI
+                    val intent = Intent(this, AddTextActivity::class.java)
+                    intent.putExtra("imageUri", imageUri.toString())
+                    startActivity(intent)
+                }
             }
-        }
-
-
 
     }
 
@@ -55,14 +60,52 @@ class MainActivity : ComponentActivity() {
     fun CameraButton() {
         Button(
             onClick = {
-                if (ContextCompat.checkSelfPermission(
+                val hasCameraPermission =
+                    ContextCompat.checkSelfPermission(
                         this@MainActivity,
                         Manifest.permission.CAMERA
                     ) == PackageManager.PERMISSION_GRANTED
-                ) {
+
+                val hasStoragePermission =
+                    ContextCompat.checkSelfPermission(
+                        this@MainActivity,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    ) == PackageManager.PERMISSION_GRANTED
+
+                if (hasCameraPermission && hasStoragePermission) {
                     launchCamera()
                 } else {
-                    requestPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    val permissionsToRequest = mutableListOf<String>()
+
+                    if (!hasCameraPermission) {
+                        permissionsToRequest.add(Manifest.permission.CAMERA)
+                    }
+
+                    if (!hasStoragePermission) {
+                        permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    }
+
+                    if (permissionsToRequest.isNotEmpty()) {
+                        // Define a separate function to handle permission requests
+                        fun requestNextPermission() {
+                            if (permissionsToRequest.isNotEmpty()) {
+                                val permission = permissionsToRequest.removeAt(0)
+                                requestPermissionLauncher.launch(permission)
+                            } else {
+                                // All permissions have been requested
+                                launchCamera()
+                            }
+                        }
+
+                        // Request the first permission
+                        requestNextPermission()
+                    } else {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Permissions not granted",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -78,13 +121,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private val requestPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+        registerForActivityResult(ActivityResultContracts.RequestPermission()).newParam(ret: boolean) { isGranted: Boolean ->
             if (isGranted) {
                 launchCamera()
             } else {
                 Toast.makeText(this, "\"Permission Not Granted\"", Toast.LENGTH_SHORT).show()
             }
+            return true;
         }
+
 
 }
 
