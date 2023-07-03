@@ -1,4 +1,4 @@
-package com.example.picscribe.ui.theme
+package com.fs.picscribe.ui.theme
 
 import android.app.Activity
 import android.os.Build

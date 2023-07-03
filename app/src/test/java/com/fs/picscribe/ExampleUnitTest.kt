@@ -1,4 +1,4 @@
-package com.example.picscribe
+package com.fs.picscribe
 
 import org.junit.Test
 
