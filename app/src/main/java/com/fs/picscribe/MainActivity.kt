@@ -2,12 +2,17 @@ package com.fs.picscribe
 
 
 import android.Manifest
+import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.MediaStore
+import android.util.Log
 import android.view.Surface.ROTATION_0
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -32,22 +37,27 @@ import androidx.core.content.ContextCompat
 import com.fs.picscribe.ui.theme.PicScribeTheme
 import java.io.File
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.io.InputStream
+import java.nio.file.attribute.FileAttribute
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity()
 {
-
+    private val TAG: String = "PLCSCRIBE"
+    private lateinit var imageCapture: ImageCapture
     private lateinit var cameraLauncher: ActivityResultLauncher<Intent>
     override fun onCreate(savedInstanceState: Bundle?)
     {
         super.onCreate(savedInstanceState)
 
-        val imageCapture = ImageCapture.Builder()
+
+        imageCapture = ImageCapture.Builder()
             .setTargetRotation(ROTATION_0)
             .build()
-val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-cameraProviderFuture.addListener(Runnable {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+cameraProviderFuture.addListener( {
     val cameraProvider = cameraProviderFuture.get()
     val preview = Preview.Builder()
         .build()
@@ -55,8 +65,7 @@ cameraProviderFuture.addListener(Runnable {
     val cameraSelector = CameraSelector.Builder()
         .requireLensFacing(CameraSelector.LENS_FACING_BACK)
         .build()
-    cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture,
-        null, preview)
+    cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture)
     // Your code using cameraProvider goes here
 }, ContextCompat.getMainExecutor(this))
 
@@ -103,11 +112,12 @@ cameraProviderFuture.addListener(Runnable {
 
     private fun checkPermissionsAndLaunch()
     {
-        var hasCameraPermission = true
-        var hasStoragePermission = true
+        var hasReadStoragePermission = true
+        var hasWritePermission = true
+
         val permissionsToRequest = mutableListOf<String>()
 
-        hasCameraPermission = ContextCompat.checkSelfPermission(
+        val hasCameraPermission= ContextCompat.checkSelfPermission(
             this@MainActivity, Manifest.permission.CAMERA
         ) == PackageManager.PERMISSION_GRANTED
         if (!hasCameraPermission)
@@ -116,17 +126,27 @@ cameraProviderFuture.addListener(Runnable {
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)
         {
-            hasStoragePermission = ContextCompat.checkSelfPermission(
+            hasReadStoragePermission = ContextCompat.checkSelfPermission(
                 this@MainActivity, Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
-            if (!hasStoragePermission)
+            if (!hasReadStoragePermission)
             {
                 permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
             }
         }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R)
+        {
 
+            hasWritePermission = ContextCompat.checkSelfPermission(
+                this@MainActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!hasWritePermission)
+            {
+                permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        }
 
-        if (hasCameraPermission && hasStoragePermission)
+        if (hasCameraPermission && hasReadStoragePermission && hasWritePermission)
         {
             launchCamera()
         } else
@@ -137,7 +157,7 @@ cameraProviderFuture.addListener(Runnable {
             } else
             {
                 Toast.makeText(
-                    this@MainActivity, "Permissions not granted", Toast.LENGTH_SHORT
+                    this@MainActivity, "Permiss not granted", Toast.LENGTH_SHORT
                 ).show()
             }
         }
@@ -157,54 +177,144 @@ cameraProviderFuture.addListener(Runnable {
 
     private fun launchCamera()
     {
-        val outputFileOptions = ImageCapture.OutputFileOptions.Builder(File(...)).build()
-        imageCapture.takePicture(outputFileOptions, Executors.,
+        val outputFileOptions = ImageCapture.OutputFileOptions.Builder(createImageFile(this, null, null, null, null)).build()
+        imageCapture.takePicture(outputFileOptions, Executors.newSingleThreadExecutor(),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(error: ImageCaptureException)
                 {
-                    // insert your code here.
+                    Log.d(TAG, "onError: ")// insert your code here.
+                    error.printStackTrace()
                 }
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                    // insert your code here.
+                    Log.d(TAG, "onImageSaved: ")// insert your code here.
                 }
             })
 
     }
 
-    lateinit var currentPhotoPath: String
+    private lateinit var currentPhotoPath: String
 
     @Throws(IOException::class)
-    private fun createImageFile(): File
-    {
-        // Create an image file name
-        val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
-        val storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-        if (storageDir.exists())
+    private fun createImageFile(
+            context: Context, bitmap: Bitmap, format: Bitmap.CompressFormat,
+            mimeType: String, displayName: String
+        ): File {
+        val directoryName = "PicScribe"
+        val currentTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
         {
-            storageDir.delete()
+            LocalTime.now().format(DateTimeFormatter.ofPattern("HHmmss"))
         } else
         {
-            storageDir.parentFile?.mkdirs()
+            "HHmmss"
         }
-        try
-        {
-            storageDir.mkdirs()
 
-        } catch (ex: IOException)
+
+        val filename = kotlin.io.path.createTempFile(currentTime, ".heic")
+
+        val values = ContentValues()
+        values.put(MediaStore.MediaColumns.TITLE, filename)
+        values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+        values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
+
+        if( android.os.Build.VERSION.SDK_INT >= 29 )
         {
-            Toast.makeText(
-                this@MainActivity, "Error Creating File", Toast.LENGTH_SHORT
-            ).show()
+
+            values.put( MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/" + directoryName );
+            values.put( MediaStore.MediaColumns.DATE_TAKEN, System.currentTimeMillis() );
+            values.put( MediaStore.MediaColumns.IS_PENDING, true );
+
+            val uri = context.contentResolver.insert( MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values );
+            if( uri != null )
+            {
+                return File(uri.path)
+            }
         }
-        return File.createTempFile(
-            "${timeStamp}_", /* prefix */
-            ".heic", /* suffix */
-            storageDir /* directory */
-        ).apply {
-            // Save a file: path for use with ACTION_VIEW intents
-            currentPhotoPath = absolutePath
+        else
+        {
+            val directory = File( Environment.getExternalStoragePublicDirectory( Environment.DIRECTORY_DCIM ), directoryName );
+            directory.mkdirs();
+
+            var file
+            val fileIndex = 1;
+            String filenameWithoutExtension = extension.length() > 0 ? filename.substring( 0, filename.length() - extension.length() - 1 ) : filename;
+            String newFilename = filename;
+            do
+            {
+                file = new File( directory, newFilename );
+                newFilename = filenameWithoutExtension + fileIndex++;
+                if( extension.length() > 0 )
+                    newFilename += "." + extension;
+            } while( file.exists() );
+
+            try
+            {
+                if( WriteFileToStream( originalFile, new FileOutputStream( file ) ) )
+                {
+                    values.put( MediaStore.MediaColumns.DATA, file.getAbsolutePath() );
+                    context.getContentResolver().insert( externalContentUri, values );
+
+                    Log.d( "Unity", "Saved media to: " + file.getPath() );
+
+                    // Refresh the Gallery
+                    Intent mediaScanIntent = new Intent( Intent.ACTION_MEDIA_SCANNER_SCAN_FILE );
+                    mediaScanIntent.setData( Uri.fromFile( file ) );
+                    context.sendBroadcast( mediaScanIntent );
+                }
+            }
+            catch( Exception e )
+            {
+                Log.e( "Unity", "Exception:", e );
+            }
         }
     }
+
+    fun WriteFileToStream( File file, OutputStream out )
+    {
+        try
+        {
+            InputStream in = new FileInputStream( file );
+            try
+            {
+                byte[] buf = new byte[1024];
+                int len;
+                while( ( len = in.read( buf ) ) > 0 )
+                    out.write( buf, 0, len );
+            }
+            finally
+            {
+                try
+                {
+                    in.close();
+                }
+                catch( Exception e )
+                {
+                    Log.e( "Unity", "Exception:", e );
+                }
+            }
+        }
+        catch( Exception e )
+        {
+            Log.e( "Unity", "Exception:", e );
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                out.close();
+            }
+            catch( Exception e )
+            {
+                Log.e( "Unity", "Exception:", e );
+            }
+        }
+
+        return true;
+    }
+
+
+
+
 
     override fun onDestroy() {
         super.onDestroy()
