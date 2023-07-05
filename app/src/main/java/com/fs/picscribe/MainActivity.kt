@@ -3,10 +3,8 @@ package com.fs.picscribe
 
 import android.Manifest
 import android.content.ContentValues
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -36,9 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.fs.picscribe.ui.theme.PicScribeTheme
 import java.io.File
-import java.io.IOException
-import java.io.InputStream
-import java.nio.file.attribute.FileAttribute
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
@@ -177,7 +172,32 @@ cameraProviderFuture.addListener( {
 
     private fun launchCamera()
     {
-        val outputFileOptions = ImageCapture.OutputFileOptions.Builder(createImageFile(this, null, null, null, null)).build()
+        // val outputFileOptions = ImageCapture.OutputFileOptions.Builder(createImageFile(this, null, null, null, null)).build()
+        val currentTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        {
+            LocalTime.now().format(DateTimeFormatter.ofPattern("HHmmss"))
+        } else
+        {
+            "HHmmss"
+        }
+        val filename = currentTime + "_PicScribe.heic"
+
+        val values = ContentValues()
+        values.put(MediaStore.MediaColumns.TITLE, filename)
+        values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+        values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
+        values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+        values.put(MediaStore.MediaColumns.MIME_TYPE, "image/heic")
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/PicScribe")
+
+        val outPhotoUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI //.buildUpon().appendPath("PicScribe").build()
+
+
+        val outputFileOptions = ImageCapture.OutputFileOptions.Builder(
+            contentResolver,
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            values).build()
+
         imageCapture.takePicture(outputFileOptions, Executors.newSingleThreadExecutor(),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(error: ImageCaptureException)
@@ -194,128 +214,43 @@ cameraProviderFuture.addListener( {
 
     private lateinit var currentPhotoPath: String
 
-    @Throws(IOException::class)
-    private fun createImageFile(
-            context: Context, bitmap: Bitmap, format: Bitmap.CompressFormat,
-            mimeType: String, displayName: String
-        ): File {
-        val directoryName = "PicScribe"
-        val currentTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-        {
-            LocalTime.now().format(DateTimeFormatter.ofPattern("HHmmss"))
-        } else
-        {
-            "HHmmss"
-        }
 
+    private fun createFolderUri(directoryName: String, filename: String): Uri {
 
-        val filename = kotlin.io.path.createTempFile(currentTime, ".heic")
 
         val values = ContentValues()
-        values.put(MediaStore.MediaColumns.TITLE, filename)
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-        values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
+        //values.put(MediaStore.MediaColumns.TITLE, filename)
+        //values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+        //values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
 
-        if( android.os.Build.VERSION.SDK_INT >= 29 )
-        {
+        var retFile: Uri?
+        val newUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI.buildUpon().appendPath("PicScribe").build()
+        val directory = File(newUri.toString())
+        directory.mkdirs()
+        retFile = newUri
+        return retFile
+        if (Build.VERSION.SDK_INT >= 29) {
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/$directoryName")
+            //values.put(MediaStore.MediaColumns.DATE_TAKEN, System.currentTimeMillis())
+            values.put(MediaStore.MediaColumns.IS_PENDING, true)
 
-            values.put( MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/" + directoryName );
-            values.put( MediaStore.MediaColumns.DATE_TAKEN, System.currentTimeMillis() );
-            values.put( MediaStore.MediaColumns.IS_PENDING, true );
-
-            val uri = context.contentResolver.insert( MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values );
-            if( uri != null )
-            {
-                return File(uri.path)
+            //contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            val uri: Uri? = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            if (uri != null) {
+                //saveImageToStream(bitmap, context.contentResolver.openOutputStream(uri))
+                values.put(MediaStore.Images.Media.IS_PENDING, false)
+                contentResolver.update(uri, values, null, null)
+                retFile = uri
             }
+
+        } else {
+            val directory = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), directoryName)
+            directory.mkdirs()
+            retFile = Uri.fromFile(directory)
         }
-        else
-        {
-            val directory = File( Environment.getExternalStoragePublicDirectory( Environment.DIRECTORY_DCIM ), directoryName );
-            directory.mkdirs();
 
-            var file
-            val fileIndex = 1;
-            String filenameWithoutExtension = extension.length() > 0 ? filename.substring( 0, filename.length() - extension.length() - 1 ) : filename;
-            String newFilename = filename;
-            do
-            {
-                file = new File( directory, newFilename );
-                newFilename = filenameWithoutExtension + fileIndex++;
-                if( extension.length() > 0 )
-                    newFilename += "." + extension;
-            } while( file.exists() );
-
-            try
-            {
-                if( WriteFileToStream( originalFile, new FileOutputStream( file ) ) )
-                {
-                    values.put( MediaStore.MediaColumns.DATA, file.getAbsolutePath() );
-                    context.getContentResolver().insert( externalContentUri, values );
-
-                    Log.d( "Unity", "Saved media to: " + file.getPath() );
-
-                    // Refresh the Gallery
-                    Intent mediaScanIntent = new Intent( Intent.ACTION_MEDIA_SCANNER_SCAN_FILE );
-                    mediaScanIntent.setData( Uri.fromFile( file ) );
-                    context.sendBroadcast( mediaScanIntent );
-                }
-            }
-            catch( Exception e )
-            {
-                Log.e( "Unity", "Exception:", e );
-            }
-        }
+        return retFile!!
     }
-
-    fun WriteFileToStream( File file, OutputStream out )
-    {
-        try
-        {
-            InputStream in = new FileInputStream( file );
-            try
-            {
-                byte[] buf = new byte[1024];
-                int len;
-                while( ( len = in.read( buf ) ) > 0 )
-                    out.write( buf, 0, len );
-            }
-            finally
-            {
-                try
-                {
-                    in.close();
-                }
-                catch( Exception e )
-                {
-                    Log.e( "Unity", "Exception:", e );
-                }
-            }
-        }
-        catch( Exception e )
-        {
-            Log.e( "Unity", "Exception:", e );
-            return false;
-        }
-        finally
-        {
-            try
-            {
-                out.close();
-            }
-            catch( Exception e )
-            {
-                Log.e( "Unity", "Exception:", e );
-            }
-        }
-
-        return true;
-    }
-
-
-
-
-
     override fun onDestroy() {
         super.onDestroy()
         cameraLauncher.unregister()
