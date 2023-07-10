@@ -25,7 +25,6 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.camera.view.PreviewView.ImplementationMode
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,7 +67,6 @@ class MainActivity : ComponentActivity()
                 ) {
                     CameraScreen()
                 }
-
             }
         }
 
@@ -220,7 +218,6 @@ class MainActivity : ComponentActivity()
         {
             Toast.makeText(this, "\"Permissions Not Granted\"", Toast.LENGTH_SHORT).show()
         }
-
     }
 
     private fun launchCamera()
@@ -235,19 +232,23 @@ class MainActivity : ComponentActivity()
         }
         val filename = currentTime + "_PicScribe.heic"
         val folder = "PicScribe"
-        val projectName = ""//100_10_1 Fine"
+        val projectName = "100_10_1 Fine"
 
         val values = ContentValues()
 
-        values.put(MediaStore.MediaColumns.TITLE, filename)
+        //values.put(MediaStore.MediaColumns.TITLE, filename)
+        //values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+        //values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-        values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+        values.put(MediaStore.MediaColumns.MIME_TYPE, "image/heic")
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/$folder/$projectName/")
 
-        createFileUri(folder, projectName, filename)?.let {
+        values.put(MediaStore.MediaColumns.IS_PENDING, true)
+
+        createFileUri(folder, projectName, filename, values)?.let {
             val outputFileOptions = ImageCapture.OutputFileOptions.Builder(
                 contentResolver,
-                it,
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 values
             ).build()
 
@@ -277,33 +278,24 @@ class MainActivity : ComponentActivity()
     private lateinit var currentPhotoPath: String
 
 
-    private fun createFileUri(appName: String, directoryName: String, filename: String): Uri?
+    private fun createFileUri(appName: String, directoryName: String, filename: String, values: ContentValues): Uri?
     {
         var retFile: Uri? = null
 
         if (Build.VERSION.SDK_INT >= 29)
         {
-            val values = ContentValues()
-            values.put(MediaStore.MediaColumns.TITLE, filename)
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-            values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-            values.put(MediaStore.MediaColumns.MIME_TYPE, "image/heic")
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/$appName")///$directoryName")
-
-            values.put(MediaStore.MediaColumns.IS_PENDING, true)
-
             val uri: Uri? = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
             if (uri != null)
             {
-                values.put(MediaStore.Images.Media.IS_PENDING, false)
-                contentResolver.update(uri, values, null, null)
+                //values.put(MediaStore.Images.Media.IS_PENDING, false)
+                //contentResolver.update(uri, values, null, null)
                 retFile = uri
             }
 
         } else
         {
-            val directory: File = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), directoryName)
+            val relativePath = "$appName/$directoryName/"
+            val directory: File = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), relativePath)
             directory.mkdirs()
             retFile = Uri.fromFile(directory)
         }
