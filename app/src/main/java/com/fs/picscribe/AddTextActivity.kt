@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -208,14 +209,13 @@ class AddTextActivity : ComponentActivity()
             Button(
                 onClick = {
                     saveTextToExif(uri, commentText)
+                    Toast.makeText(this@AddTextActivity,"Saved Comment", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
                 Text("Save Comment")
             }
 
-
-            // Add more content as needed...
         }
     }
 

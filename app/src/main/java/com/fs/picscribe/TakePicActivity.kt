@@ -22,19 +22,26 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
@@ -44,72 +51,74 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 
-class TakePictureActivity : ComponentActivity()
+class TakePicActivity : ComponentActivity()
 {
     private val TAG: String = "PLCSCRIBE"
     private lateinit var imageCapture: ImageCapture
-    private lateinit var preview: Preview
+    private lateinit var preview: androidx.camera.core.Preview
     private lateinit var cameraLauncher: ActivityResultLauncher<Intent>
     private var sharedPreferences: SharedPreferences? =  null
-    lateinit var projectName : String
-    lateinit var subfolder : String
+     var projectName = "Default"
+     var subfolder = ""
 
-    override fun onCreate(savedInstanceState: Bundle?, persistentState: PersistableBundle?)
+    override fun onCreate(savedInstanceState: Bundle?)
     {
-        super.onCreate(savedInstanceState, persistentState)
+        super.onCreate(savedInstanceState)
 
-        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
 
-        sharedPreferences?.let { shP ->
-            shP.getString("proj-name", "Default")
-            shP.getString("subfolder-name", "")
-            shP.getBoolean("comment-in-filename", false)
-        }
+                sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+
+                sharedPreferences?.let { shP ->
+                    projectName = shP.getString("proj-name", "Default")!!
+                    subfolder = shP.getString("subfolder-name", "")!!
+                    //shP.getBoolean("comment-in-filename", false)
+                }
 
         preview = Preview.Builder().build()
 
-        setContent {
-            PicScribeTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    CameraScreen()
+                setContent {
+                    PicScribeTheme {
+
+                        // A surface container using the 'background' color from the theme
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background
+                        ) {
+                            CameraScreen()
+                        }
+                    }
                 }
-            }
-        }
 
 
-        val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-        {
-            this.display?.rotation ?: Surface.ROTATION_0
-        } else
-        {
-            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.rotation
-        }
+                val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                {
+                    this.display?.rotation ?: Surface.ROTATION_0
+                } else
+                {
+                    val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay.rotation
+                }
 
 
 
-        imageCapture = ImageCapture.Builder()
-            .setTargetRotation(rotation)
-            .build()
+                imageCapture = ImageCapture.Builder()
+                    .setTargetRotation(rotation)
+                    .build()
 
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-        cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+                cameraProviderFuture.addListener({
+                    val cameraProvider = cameraProviderFuture.get()
 
 
-            val cameraSelector = CameraSelector.Builder()
-                .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                .build()
+                    val cameraSelector = CameraSelector.Builder()
+                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                        .build()
 
-            cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
-            // Your code using cameraProvider goes here
-        }, ContextCompat.getMainExecutor(this))
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
+                    // Your code using cameraProvider goes here
+                }, ContextCompat.getMainExecutor(this))
 
 
     }
@@ -137,6 +146,7 @@ class TakePictureActivity : ComponentActivity()
                 preview.setSurfaceProvider(previewView.surfaceProvider)
             }
             CameraButton()
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
 
@@ -153,6 +163,7 @@ class TakePictureActivity : ComponentActivity()
         ) {
             Text(text = "Capture Photo")
         }
+        
     }
 
 
@@ -165,17 +176,18 @@ class TakePictureActivity : ComponentActivity()
         } else {
             "HHmmss"
         }
-        val filename = "$currentDate-${currentTime}_PicScribe.heic"
+        val filenameFirstPart = "$currentDate-${currentTime}"
+        val filename = "${filenameFirstPart}_PicScribe.heic"
         val baseFolder = "PicScribe"
 
-        val completePath = {
+        val completePath = run {
             if (subfolder.isNullOrEmpty())
             {
-                "$baseFolder/$projectName"
+                "$baseFolder/$projectName/"
             }
             else
             {
-                "$baseFolder/$projectName/$subfolder"
+                "$baseFolder/$projectName/$subfolder/"
             }
         }
         val values = ContentValues()
@@ -185,7 +197,7 @@ class TakePictureActivity : ComponentActivity()
         //values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
         values.put(MediaStore.MediaColumns.MIME_TYPE, "image/heic")
-        values.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/$baseFolder/$projectName/")
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/$completePath")
 
         values.put(MediaStore.MediaColumns.IS_PENDING, true)
 
@@ -208,8 +220,9 @@ class TakePictureActivity : ComponentActivity()
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults)
                     {
                         val savedUri = outputFileResults.savedUri
-                        val intent = Intent(this@TakePictureActivity, AddTextActivity::class.java)
+                        val intent = Intent(this@TakePicActivity, AddTextActivity::class.java)
                         intent.putExtra("imageUri", savedUri.toString())
+                        intent.putExtra("filenameFirstPart", filenameFirstPart)
                         startActivity(intent)
                         Log.d(TAG, "onImageSaved: ")// insert your code here.
                     }
@@ -254,6 +267,4 @@ class TakePictureActivity : ComponentActivity()
         super.onDestroy()
         cameraLauncher.unregister()
     }
-
-
 }

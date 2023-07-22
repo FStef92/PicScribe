@@ -20,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -44,25 +45,28 @@ class MainActivity : ComponentActivity()
             Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "Project Name:")
-                    OutlinedTextField(
-                        value = projectName.value,
-                        onValueChange = { projectName.value = it },
-                        modifier = Modifier.fillMaxWidth()
+                    FilteredTextField(
+                        text = projectName.value,
+                        onChanged = { projectName.value = it
+                            sharedPreferences.edit().putString("proj-name", it).apply()},
+
+                        ignoredRegex = Regex("[\\[\\]\\\\(){}.+*?^\\/$|]")
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "Subfolder:")
-                    OutlinedTextField(
-                        value = subfolder.value,
-                        onValueChange = { subfolder.value = it },
-                        modifier = Modifier.fillMaxWidth()
+                    FilteredTextField(
+                        text = subfolder.value,
+                        onChanged = { subfolder.value = it
+                            sharedPreferences.edit().putString("subfolder-name", it).apply()},
+                        ignoredRegex = Regex("[\\[\\]\\\\(){}.+*?^\\/\$|]")
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(
                         checked = writeCommentInFilename.value,
                         onCheckedChange = { writeCommentInFilename.value = it
-
+                            sharedPreferences.edit().putBoolean("comment-in-filename", it).apply()
                                 // do something with this preference
 
                                           },
@@ -81,6 +85,19 @@ class MainActivity : ComponentActivity()
 
     }
 
+    @Composable
+    fun FilteredTextField(
+        text: String,
+        onChanged: (String) -> Unit,
+        ignoredRegex: Regex
+    ) {
+        OutlinedTextField(value = text,
+            modifier = Modifier.fillMaxWidth(),
+            onValueChange = {
+                if (!it.contains(ignoredRegex)) onChanged(it)
+            }
+        )
+    }
 
         private fun checkPermissionsAndLaunch()
         {
@@ -148,7 +165,7 @@ class MainActivity : ComponentActivity()
 
         private fun launchCamera()
         {
-            val intent = Intent(this@MainActivity, TakePictureActivity::class.java)
+            val intent = Intent(applicationContext, TakePicActivity::class.java)
             startActivity(intent)
         }
 
