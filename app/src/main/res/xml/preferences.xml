@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen   xmlns:app="http://schemas.android.com/apk/res-auto">
+
+        <SwitchPreference
+                app:key="comment-in-filename"
+                app:title="Save comment in filename"
+                app:defaultValue="false"
+                />
+
+        <EditTextPreference
+                app:key="proj-name"
+                app:title="Current project name"
+                app:defaultValue="default"/>
+
+        <EditTextPreference
+                app:key="subfolder-name"
+                app:title="Subfolder name"
+                app:defaultValue=""/>
+
+</androidx.preference.PreferenceScreen>

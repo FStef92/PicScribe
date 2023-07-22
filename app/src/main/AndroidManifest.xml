@@ -24,11 +24,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PicScribe"
         tools:targetApi="31">
-        <activity
-            android:name="com.fs.picscribe.AddTextActivity"
-            android:exported="false"
-            android:label="@string/title_activity_add_text"
-            android:theme="@style/Theme.PicScribe" />
+
         <activity
             android:name="com.fs.picscribe.MainActivity"
             android:exported="true"
@@ -40,6 +36,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+                android:name="com.fs.picscribe.TakePictureActivity"
+                android:exported="false"
+                android:label="@string/title_activity_take_picture"
+                android:theme="@style/Theme.PicScribe" />
+        <activity
+                android:name="com.fs.picscribe.AddTextActivity"
+                android:exported="false"
+                android:label="@string/title_activity_add_text"
+                android:theme="@style/Theme.PicScribe" />
     </application>
 
 </manifest>
