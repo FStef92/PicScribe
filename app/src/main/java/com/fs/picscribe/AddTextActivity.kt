@@ -2,6 +2,8 @@ package com.fs.picscribe
 
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.ContentValues
+import android.content.SharedPreferences
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
@@ -37,17 +40,35 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.preference.PreferenceManager
 import com.fs.picscribe.ui.theme.PicScribeTheme
+import java.io.IOException
 
 
 class AddTextActivity : ComponentActivity()
 {
+    private var commentFilename = false
+    lateinit var filenameFirstPart: String
+    lateinit var filenameSecondPart: String
+    private var sharedPreferences: SharedPreferences? = null
     override fun onCreate(savedInstanceState: Bundle?)
     {
         super.onCreate(savedInstanceState)
 
+
+
+
+            sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+
+            sharedPreferences?.let { shP ->
+                commentFilename = shP.getBoolean("comment-in-filename", false)
+            }
+
         // Retrieve the image URI from the intent
         val imageUriString = intent.getStringExtra("imageUri")
+
+        filenameFirstPart = intent.getStringExtra("filenameFirstPart") ?: ""
+        filenameSecondPart = intent.getStringExtra("filenameSecondPart") ?: ""
         val imageUri = Uri.parse(imageUriString)
         // Get the Bitmap from the image URI
         val bitmap = this.contentResolver.openInputStream(imageUri)?.use {
@@ -75,91 +96,91 @@ class AddTextActivity : ComponentActivity()
                 .appendPath(uri.path!!)
                 .build()
 
-            // Convert the content URI to a file path
- /*           val filePath = getFileFromContentUri(contentUri, contentResolver)
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-            {
-                val parcelFileDescriptor = contentResolver.openFile(contentUri, "rw", CancellationSignal())
-                parcelFileDescriptor.fileDescriptor.
-            }*/
             try
             {
-                getContentResolver().openFileDescriptor(uri, "rw").use { imagePfd ->
+                getContentResolver().openAssetFileDescriptor(uri, "rw").use { imagePfd ->
                     val exifInterface = ExifInterface(imagePfd!!.fileDescriptor)
                     exifInterface.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, commentText)
                     exifInterface.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, commentText)
+
                     exifInterface.setAttribute("XPTitle", commentText)
                     exifInterface.setAttribute("XPComment", commentText)
                     exifInterface.setAttribute(ExifInterface.TAG_USER_COMMENT, commentText)
                     exifInterface.saveAttributes()
-                }
-            } catch (e: Exception)
+            }
+            } catch (e: IOException)
             {
                 e.printStackTrace()
+                Toast.makeText(this, "Could not edit Exif Metadata", Toast.LENGTH_SHORT).show()
             }
 
-/*            if (filePath != null)
+            if (commentFilename)
             {
-                // Create a new ExifInterface instance and pass the file path of your captured image
-                val exifInterface = ExifInterface(filePath)
+                renameFile(uri, filenameFirstPart, filenameSecondPart, commentText)
+            }
 
-                // Write the comment text to the 'oggetto' field in EXIF metadata
-                exifInterface.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, commentText)
+        }
+    }
 
-                // Save the changes to the EXIF metadata
-                exifInterface.saveAttributes()
-            }*/
+    private fun renameFile(uri: Uri, filenameFirstPart: String, filenameSecondPart: String, commentText: String) {
+        val projection = arrayOf(MediaStore.Images.Media.DISPLAY_NAME)
+
+        // Get the current filename using ContentProvider from MediaStore
+        val cursor = contentResolver.query(uri, projection, null, null, null)
+        val currName: String? = cursor?.use {
+            if (it.moveToFirst())
+            {
+                try
+                {
+                    return@use it.getString(it.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME))
+                } catch (e: IllegalArgumentException)
+                {
+                    Toast.makeText(this, "Could not find file or edit filename", Toast.LENGTH_SHORT).show()
+                    e.printStackTrace()
+                }
+            }
+
+            null
+        }
+
+        currName?.apply {
+            val newName = newFileName(currName, filenameFirstPart, filenameSecondPart, commentText) ?: currName
+            val values = ContentValues()
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, newName)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+            {
+                /*                    val bundle = Bundle().apply {
+                                        putBoolean(MediaStore.QUERY_ARG_MATCH_PENDING, true)
+                                    }*/
+
+                contentResolver.update(uri, values, null)
+            } else
+            {
+                //TODO
+            }
         }
     }
 
 
-    fun getFileFromContentUri(picUri: Uri, contentResolver: ContentResolver): String?
+    fun newFileName(currName: String, filenameFirstPart: String, filenameSecondPart: String, commentText: String): String
     {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+
+        val firstPartIndex = currName.indexOf(filenameFirstPart)
+        val secondPartIndex = currName.indexOf(filenameSecondPart)
+
+        if (firstPartIndex != -1 && secondPartIndex != -1 && firstPartIndex < secondPartIndex)
         {
-            MediaStore.getMediaUri(this, picUri)
+            return StringBuilder()
+                .append(currName.substring(0, firstPartIndex + filenameFirstPart.length))
+                .append("_" + commentText.take(127))
+                .append(currName.substring(secondPartIndex, secondPartIndex + filenameSecondPart.length))
+                .toString()
+        } else
+        {
+            return currName
         }
-        val collection =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                MediaStore.Video.Media.getContentUri(
-                    MediaStore.VOLUME_EXTERNAL
-                )
-            } else {
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            }
-        val projection = arrayOf(
-            MediaStore.Images.Media._ID,
-            MediaStore.Images.Media.DATA,
-            MediaStore.Images.Media.DISPLAY_NAME,
-            MediaStore.Images.Media.RELATIVE_PATH,
-        )
 
-        val cursor = contentResolver.query(collection, projection, null, null, null)
-        cursor?.use {
-            if (it.moveToFirst())
-            {
-                val columnIndex = it.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-                // Cache column indices.
-                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-                val nameColumn =
-                    cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-
-
-
-                    // Get values of columns for a given video.
-                    val id = cursor.getLong(idColumn)
-                    val name = cursor.getString(nameColumn)
-
-
-                    val contentUri: Uri = ContentUris.withAppendedId(
-                        MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                        id
-                    )
-                return it.getString(columnIndex)
-            }
-        }
-        return null
     }
 
     @Composable
@@ -209,7 +230,7 @@ class AddTextActivity : ComponentActivity()
             Button(
                 onClick = {
                     saveTextToExif(uri, commentText)
-                    Toast.makeText(this@AddTextActivity,"Saved Comment", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@AddTextActivity, "Saved Comment", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {

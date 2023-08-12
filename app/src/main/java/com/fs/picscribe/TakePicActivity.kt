@@ -31,13 +31,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -46,111 +54,125 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import com.fs.picscribe.ui.theme.PicScribeTheme
+import com.fs.picscribe.viewmodels.TakePicActivityViewModel
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
+import javax.inject.Inject
 
 class TakePicActivity : ComponentActivity()
 {
+    private var commentFilename: Boolean = false
     private val TAG: String = "PLCSCRIBE"
     private lateinit var imageCapture: ImageCapture
     private lateinit var preview: androidx.camera.core.Preview
     private lateinit var cameraLauncher: ActivityResultLauncher<Intent>
-    private var sharedPreferences: SharedPreferences? =  null
-     var projectName = "Default"
-     var subfolder = ""
+    private var sharedPreferences: SharedPreferences? = null
+    var projectName = "Default"
+    var subfolder = ""
+    lateinit var takePicActivityViewModel : TakePicActivityViewModel
 
     override fun onCreate(savedInstanceState: Bundle?)
     {
         super.onCreate(savedInstanceState)
 
+        @Inject takePicActivityViewModel
 
-                sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
 
-                sharedPreferences?.let { shP ->
-                    projectName = shP.getString("proj-name", "Default")!!
-                    subfolder = shP.getString("subfolder-name", "")!!
-                    //shP.getBoolean("comment-in-filename", false)
-                }
+
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+
+        sharedPreferences?.let { shP ->
+            projectName = shP.getString("proj-name", "Default")!!
+            subfolder = shP.getString("subfolder-name", "")!!
+            commentFilename = shP.getBoolean("comment-in-filename", false)
+        }
 
         preview = Preview.Builder().build()
 
-                setContent {
-                    PicScribeTheme {
+        setContent {
+            PicScribeTheme {
 
-                        // A surface container using the 'background' color from the theme
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-                            CameraScreen()
-                        }
-                    }
+                // A surface container using the 'background' color from the theme
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    CameraScreen()
                 }
+            }
+        }
 
 
-                val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-                {
-                    this.display?.rotation ?: Surface.ROTATION_0
-                } else
-                {
-                    val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                    @Suppress("DEPRECATION")
-                    windowManager.defaultDisplay.rotation
-                }
+        val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+        {
+            this.display?.rotation ?: Surface.ROTATION_0
+        } else
+        {
+            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.rotation
+        }
 
 
 
-                imageCapture = ImageCapture.Builder()
-                    .setTargetRotation(rotation)
-                    .build()
+        imageCapture = ImageCapture.Builder()
+            .setTargetRotation(rotation)
+            .build()
 
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-                cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
 
 
-                    val cameraSelector = CameraSelector.Builder()
-                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                        .build()
+            val cameraSelector = CameraSelector.Builder()
+                .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                .build()
 
-                    cameraProvider.unbindAll()
-                    cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
-                    // Your code using cameraProvider goes here
-                }, ContextCompat.getMainExecutor(this))
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
+            // Your code using cameraProvider goes here
+        }, ContextCompat.getMainExecutor(this))
 
 
     }
 
     @Composable
-    private fun CameraScreen()
-    {
-
-        val context = LocalContext.current
-        val previewView = remember {
-            PreviewView(context)
-        }
-
-        Box(
-            contentAlignment = Alignment.BottomCenter,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            AndroidView(
-                factory = { previewView },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-            )
-            {
-                preview.setSurfaceProvider(previewView.surfaceProvider)
-            }
-            CameraButton()
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-
+private fun CameraScreen() {
+    val context = LocalContext.current
+    val previewView = remember {
+        PreviewView(context)
     }
+
+    var isFlashOn by remember { mutableStateOf(false) }
+
+    Box(
+        contentAlignment = Alignment.BottomCenter,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        AndroidView(
+            factory = { previewView },
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+        ) {
+            preview.setSurfaceProvider(previewView.surfaceProvider)
+        }
+        CameraButton()
+        Spacer(modifier = Modifier.height(16.dp))
+        IconButton(
+            onClick = { isFlashOn = !isFlashOn },
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Icon(
+                imageVector = if (isFlashOn) Icons.Filled.KeyboardArrowRight else Icons.Default.KeyboardArrowLeft,
+                contentDescription = "Toggle Flash"
+            )
+        }
+    }
+}
+
 
 
     @Composable
@@ -163,7 +185,7 @@ class TakePicActivity : ComponentActivity()
         ) {
             Text(text = "Capture Photo")
         }
-        
+
     }
 
 
@@ -171,30 +193,41 @@ class TakePicActivity : ComponentActivity()
     {
         // val outputFileOptions = ImageCapture.OutputFileOptions.Builder(createImageFile(this, null, null, null, null)).build()
         val currentDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-        val currentTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val currentTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        {
             LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss"))
-        } else {
+        } else
+        {
             "HHmmss"
         }
-        val filenameFirstPart = "$currentDate-${currentTime}"
-        val filename = "${filenameFirstPart}_PicScribe.heic"
+
+        val filenameFirstPart =  "$currentDate-$currentTime"
+
+    /*run {
+            if (commentFilename)
+            {*/
+
+/*            } else
+            {
+                ""
+            }}*/
+
+        val filenameSecondPart = "_PicScribe.heic"
+
+        val filename = "$filenameFirstPart$filenameSecondPart"
         val baseFolder = "PicScribe"
 
         val completePath = run {
             if (subfolder.isNullOrEmpty())
             {
                 "$baseFolder/$projectName/"
-            }
-            else
+            } else
             {
                 "$baseFolder/$projectName/$subfolder/"
             }
         }
         val values = ContentValues()
 
-        //values.put(MediaStore.MediaColumns.TITLE, filename)
-        //values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-        //values.put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
         values.put(MediaStore.MediaColumns.MIME_TYPE, "image/heic")
         values.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/$completePath")
@@ -223,6 +256,7 @@ class TakePicActivity : ComponentActivity()
                         val intent = Intent(this@TakePicActivity, AddTextActivity::class.java)
                         intent.putExtra("imageUri", savedUri.toString())
                         intent.putExtra("filenameFirstPart", filenameFirstPart)
+                        intent.putExtra("filenameSecondPart", filenameSecondPart)
                         startActivity(intent)
                         Log.d(TAG, "onImageSaved: ")// insert your code here.
                     }

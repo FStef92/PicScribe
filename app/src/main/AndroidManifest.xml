@@ -33,6 +33,7 @@
                 android:theme="@style/Theme.PicScribe" />
         <activity
                 android:name=".TakePicActivity"
+                android:parentActivityName=".MainActivity"
                 android:exported="false"
                 android:label="@string/title_activity_take_pic"
                 android:theme="@style/Theme.PicScribe" />
