@@ -249,6 +249,7 @@ class TakePicActivity : ComponentActivity() {
                         error.printStackTrace()
                     }
 
+
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                         val savedUri = outputFileResults.savedUri
                         val intent = Intent(this@TakePicActivity, AddTextActivity::class.java)
