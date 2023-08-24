@@ -18,8 +18,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
+import androidx.camera.core.impl.ImageCaptureConfig
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Arrangement
@@ -52,44 +54,43 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.fs.picscribe.ui.theme.PicScribeTheme
 import com.fs.picscribe.viewmodels.TakePicActivityViewModel
+import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.processor.internal.definecomponent.codegen._dagger_hilt_android_components_ViewModelComponent
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import javax.inject.Inject
 
-class TakePicActivity : ComponentActivity()
-{
+
+@AndroidEntryPoint
+class TakePicActivity : ComponentActivity() {
     private var commentFilename: Boolean = false
     private val TAG: String = "PLCSCRIBE"
     private lateinit var imageCapture: ImageCapture
     private lateinit var preview: androidx.camera.core.Preview
-    private lateinit var cameraLauncher: ActivityResultLauncher<Intent>
-    private var sharedPreferences: SharedPreferences? = null
     var projectName = "Default"
     var subfolder = ""
-    lateinit var takePicActivityViewModel : TakePicActivityViewModel
+    lateinit var takePicActivityViewModel: TakePicActivityViewModel
 
-    override fun onCreate(savedInstanceState: Bundle?)
-    {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        @Inject takePicActivityViewModel
+        takePicActivityViewModel = ViewModelProvider(this).get(TakePicActivityViewModel::class.java)
+
+        takePicActivityViewModel.initSharedPreferences(this)
+
+        projectName = takePicActivityViewModel.getProjectName()
+        subfolder = takePicActivityViewModel.getSubfolder()
+        commentFilename = takePicActivityViewModel.isCommentInFilenameEnabled()
 
 
-
-        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
-
-        sharedPreferences?.let { shP ->
-            projectName = shP.getString("proj-name", "Default")!!
-            subfolder = shP.getString("subfolder-name", "")!!
-            commentFilename = shP.getBoolean("comment-in-filename", false)
-        }
-
-        preview = Preview.Builder().build()
+        preview = takePicActivityViewModel.buildPreview()
 
         setContent {
             PicScribeTheme {
@@ -105,11 +106,9 @@ class TakePicActivity : ComponentActivity()
         }
 
 
-        val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-        {
+        val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             this.display?.rotation ?: Surface.ROTATION_0
-        } else
-        {
+        } else {
             val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             @Suppress("DEPRECATION")
             windowManager.defaultDisplay.rotation
@@ -139,45 +138,43 @@ class TakePicActivity : ComponentActivity()
     }
 
     @Composable
-private fun CameraScreen() {
-    val context = LocalContext.current
-    val previewView = remember {
-        PreviewView(context)
-    }
-
-    var isFlashOn by remember { mutableStateOf(false) }
-
-    Box(
-        contentAlignment = Alignment.BottomCenter,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        AndroidView(
-            factory = { previewView },
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
-        ) {
-            preview.setSurfaceProvider(previewView.surfaceProvider)
+    private fun CameraScreen() {
+        val context = LocalContext.current
+        val previewView = remember {
+            PreviewView(context)
         }
-        CameraButton()
-        Spacer(modifier = Modifier.height(16.dp))
-        IconButton(
-            onClick = { isFlashOn = !isFlashOn },
-            modifier = Modifier.padding(16.dp)
+
+        var isFlashOn by remember { mutableStateOf(false) }
+
+        Box(
+            contentAlignment = Alignment.BottomCenter,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Icon(
-                imageVector = if (isFlashOn) Icons.Filled.KeyboardArrowRight else Icons.Default.KeyboardArrowLeft,
-                contentDescription = "Toggle Flash"
-            )
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+            ) {
+                preview.setSurfaceProvider(previewView.surfaceProvider)
+            }
+            CameraButton()
+            Spacer(modifier = Modifier.height(16.dp))
+            IconButton(
+                onClick = { isFlashOn = !isFlashOn },
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = if (isFlashOn) Icons.Filled.KeyboardArrowRight else Icons.Default.KeyboardArrowLeft,
+                    contentDescription = "Toggle Flash"
+                )
+            }
         }
     }
-}
-
 
 
     @Composable
-    fun CameraButton()
-    {
+    fun CameraButton() {
         Button(
             onClick = {
                 launchCamera()
@@ -189,28 +186,25 @@ private fun CameraScreen() {
     }
 
 
-    private fun launchCamera()
-    {
+    private fun launchCamera() {
         // val outputFileOptions = ImageCapture.OutputFileOptions.Builder(createImageFile(this, null, null, null, null)).build()
         val currentDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-        val currentTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-        {
+        val currentTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss"))
-        } else
-        {
+        } else {
             "HHmmss"
         }
 
-        val filenameFirstPart =  "$currentDate-$currentTime"
+        val filenameFirstPart = "$currentDate-$currentTime"
 
-    /*run {
-            if (commentFilename)
-            {*/
+        /*run {
+                if (commentFilename)
+                {*/
 
-/*            } else
-            {
-                ""
-            }}*/
+        /*            } else
+                    {
+                        ""
+                    }}*/
 
         val filenameSecondPart = "_PicScribe.heic"
 
@@ -218,18 +212,15 @@ private fun CameraScreen() {
         val baseFolder = "PicScribe"
 
         val completePath = run {
-            if (subfolder.isNullOrEmpty())
-            {
+            if (subfolder.isNullOrEmpty()) {
                 "$baseFolder/$projectName/"
-            } else
-            {
+            } else {
                 "$baseFolder/$projectName/$subfolder/"
             }
         }
         val values = ContentValues()
-
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-        values.put(MediaStore.MediaColumns.MIME_TYPE, "image/heic")
+        values.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
         values.put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/$completePath")
 
         values.put(MediaStore.MediaColumns.IS_PENDING, true)
@@ -239,19 +230,26 @@ private fun CameraScreen() {
                 contentResolver,
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 values
-            ).build()
+            )
+                .build()
 
+            val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                this.display?.rotation ?: Surface.ROTATION_0
+            } else {
+                val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                @Suppress("DEPRECATION")
+                windowManager.defaultDisplay.rotation
+            }
+
+            imageCapture.targetRotation = rotation
             imageCapture.takePicture(outputFileOptions, Executors.newSingleThreadExecutor(),
-                object : ImageCapture.OnImageSavedCallback
-                {
-                    override fun onError(error: ImageCaptureException)
-                    {
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onError(error: ImageCaptureException) {
                         Log.d(TAG, "onError: ")// insert your code here.
                         error.printStackTrace()
                     }
 
-                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults)
-                    {
+                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                         val savedUri = outputFileResults.savedUri
                         val intent = Intent(this@TakePicActivity, AddTextActivity::class.java)
                         intent.putExtra("imageUri", savedUri.toString())
@@ -260,9 +258,7 @@ private fun CameraScreen() {
                         startActivity(intent)
                         Log.d(TAG, "onImageSaved: ")// insert your code here.
                     }
-
                 })
-
         }
 
 
@@ -271,24 +267,29 @@ private fun CameraScreen() {
     private lateinit var currentPhotoPath: String
 
 
-    private fun createFileUri(appName: String, directoryName: String, filename: String, values: ContentValues): Uri?
-    {
+    private fun createFileUri(
+        appName: String,
+        directoryName: String,
+        filename: String,
+        values: ContentValues
+    ): Uri? {
         var retFile: Uri? = null
 
-        if (Build.VERSION.SDK_INT >= 29)
-        {
-            val uri: Uri? = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-            if (uri != null)
-            {
+        if (Build.VERSION.SDK_INT >= 29) {
+            val uri: Uri? =
+                contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            if (uri != null) {
                 //values.put(MediaStore.Images.Media.IS_PENDING, false)
                 //contentResolver.update(uri, values, null, null)
                 retFile = uri
             }
 
-        } else
-        {
+        } else {
             val relativePath = "$appName/$directoryName/"
-            val directory: File = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), relativePath)
+            val directory: File = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                relativePath
+            )
             directory.mkdirs()
             retFile = Uri.fromFile(directory)
         }
@@ -296,9 +297,7 @@ private fun CameraScreen() {
         return retFile
     }
 
-    override fun onDestroy()
-    {
+    override fun onDestroy() {
         super.onDestroy()
-        cameraLauncher.unregister()
     }
 }

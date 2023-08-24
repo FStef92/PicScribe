@@ -61,7 +61,6 @@ class MainActivity : ComponentActivity()
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(text = "Project Name:")
                         Spacer(modifier = Modifier.width(8.dp))
-                        Box(modifier = Modifier.weight(1f)) {
                             FilteredTextField(
                                 text = projectName.value,
                                 onChanged = {
@@ -70,8 +69,6 @@ class MainActivity : ComponentActivity()
                                 },
                                 ignoredRegex = Regex("[\\[\\]\\\\(){}.+*?^\\/\$|]")
                             )
-
-                        }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -124,7 +121,7 @@ class MainActivity : ComponentActivity()
         ignoredRegex: Regex
     ) {
         OutlinedTextField(value = text,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth(),
             onValueChange = {
                 if (!it.contains(ignoredRegex)) onChanged(it)
             }
