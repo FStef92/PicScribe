@@ -3,30 +3,22 @@ package com.fs.picscribe
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.PersistableBundle
 import android.provider.MediaStore
 import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.ActivityResultLauncher
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
-import androidx.camera.core.impl.ImageCaptureConfig
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,43 +47,39 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
-import androidx.preference.PreferenceManager
 import com.fs.picscribe.ui.theme.PicScribeTheme
 import com.fs.picscribe.viewmodels.TakePicActivityViewModel
 import dagger.hilt.android.AndroidEntryPoint
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.processor.internal.definecomponent.codegen._dagger_hilt_android_components_ViewModelComponent
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
-import javax.inject.Inject
 
 
 @AndroidEntryPoint
 class TakePicActivity : ComponentActivity() {
     private var commentFilename: Boolean = false
-    private val TAG: String = "PLCSCRIBE"
     private lateinit var imageCapture: ImageCapture
+    private val TAG: String = "PLCSCRIBE"
     private lateinit var preview: androidx.camera.core.Preview
     var projectName = "Default"
     var subfolder = ""
-    lateinit var takePicActivityViewModel: TakePicActivityViewModel
+    lateinit var takePicAVM: TakePicActivityViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        takePicActivityViewModel = ViewModelProvider(this).get(TakePicActivityViewModel::class.java)
+        takePicAVM = ViewModelProvider(this).get(TakePicActivityViewModel::class.java)
 
-        takePicActivityViewModel.initSharedPreferences(this)
+        takePicAVM.initSharedPreferences()
 
-        projectName = takePicActivityViewModel.getProjectName()
-        subfolder = takePicActivityViewModel.getSubfolder()
-        commentFilename = takePicActivityViewModel.isCommentInFilenameEnabled()
+        projectName = takePicAVM.getProjectName()
+        subfolder = takePicAVM.getSubfolder()
+        commentFilename = takePicAVM.isCommentInFilenameEnabled()
 
+        preview = takePicAVM.buildPreview()
 
-        preview = takePicActivityViewModel.buildPreview()
-
+        imageCapture = ImageCapture.Builder().build()
         setContent {
             PicScribeTheme {
 
@@ -116,9 +104,7 @@ class TakePicActivity : ComponentActivity() {
 
 
 
-        imageCapture = ImageCapture.Builder()
-            .setTargetRotation(rotation)
-            .build()
+
 
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
@@ -130,7 +116,7 @@ class TakePicActivity : ComponentActivity() {
                 .build()
 
             cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
+            cameraProvider.bindToLifecycle(this, cameraSelector, preview, takePicAVM.getImageCapture())
             // Your code using cameraProvider goes here
         }, ContextCompat.getMainExecutor(this))
 
@@ -144,7 +130,6 @@ class TakePicActivity : ComponentActivity() {
             PreviewView(context)
         }
 
-        var isFlashOn by remember { mutableStateOf(false) }
 
         Box(
             contentAlignment = Alignment.BottomCenter,
@@ -161,17 +146,21 @@ class TakePicActivity : ComponentActivity() {
             CameraButton()
             Spacer(modifier = Modifier.height(16.dp))
             IconButton(
-                onClick = { isFlashOn = !isFlashOn },
+                onClick = { toggleFlash() },
                 modifier = Modifier.padding(16.dp)
             ) {
                 Icon(
-                    imageVector = if (isFlashOn) Icons.Filled.KeyboardArrowRight else Icons.Default.KeyboardArrowLeft,
+                    imageVector = if (takePicAVM.isFlashOn) Icons.Filled.KeyboardArrowRight else Icons.Default.KeyboardArrowLeft,
                     contentDescription = "Toggle Flash"
                 )
             }
         }
     }
 
+    fun toggleFlash()
+    {
+        takePicAVM.toggleFlash()
+    }
 
     @Composable
     fun CameraButton() {
@@ -230,8 +219,7 @@ class TakePicActivity : ComponentActivity() {
                 contentResolver,
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 values
-            )
-                .build()
+            ).build()
 
             val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 this.display?.rotation ?: Surface.ROTATION_0
@@ -241,7 +229,9 @@ class TakePicActivity : ComponentActivity() {
                 windowManager.defaultDisplay.rotation
             }
 
+
             imageCapture.targetRotation = rotation
+            imageCapture.flashMode = ImageCapture.FLASH_MODE_AUTO
             imageCapture.takePicture(outputFileOptions, Executors.newSingleThreadExecutor(),
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onError(error: ImageCaptureException) {
@@ -261,6 +251,7 @@ class TakePicActivity : ComponentActivity() {
                     }
                 })
         }
+
 
 
     }
