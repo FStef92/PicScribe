@@ -36,6 +36,7 @@ class TakePicActivityViewModel @Inject constructor(application: ApplicationClass
     }
 
 
+
     fun getFoldersUnderDCIM(contentResolver: ContentResolver, completePath: String): List<String> {
         val folders = mutableListOf<String>()
         val projection = arrayOf(MediaStore.Images.Media.DATA)
