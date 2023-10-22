@@ -6,8 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.preference.*
-
+import android.preference.PreferenceManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -154,7 +153,6 @@ class MainActivity : ComponentActivity()
             }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R)
             {
-
                 hasWritePermission = ContextCompat.checkSelfPermission(
                     this@MainActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE
                 ) == PackageManager.PERMISSION_GRANTED
